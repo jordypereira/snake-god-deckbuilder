@@ -207,4 +207,3 @@ The GameManager emits events that the UI listens to:
 ## License
 
 MIT
-# snake-god-deckbuilder
