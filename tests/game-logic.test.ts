@@ -146,6 +146,16 @@ test('game manager starts a battle and draws a frontline', () => {
   }
 });
 
+test('game manager can start a run in reward phase', () => {
+  const manager = new GameManager(new Deck(createStarterCards()));
+
+  manager.startRun();
+
+  assert.equal(manager.getGameState(), GameState.REWARD);
+  assert.equal(manager.getAvailableMutations().length, 3);
+  assert.equal(manager.getCurrentHand().length, 0);
+});
+
 test('game manager enemy turn damages the snake when countdown reaches zero', () => {
   const manager = new GameManager(new Deck(createStarterCards())) as GameManager & {
     resolveEnemyTurn: () => void;

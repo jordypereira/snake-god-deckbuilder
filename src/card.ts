@@ -49,17 +49,17 @@ export class Card {
   getTypeColor(): string {
     switch (this.type) {
       case CardType.STRIKE:
-        return '#FF6B6B'; // Red - Damage
+        return '#666666'; // Gray - colorless starter
       case CardType.COIL:
-        return '#4ECDC4'; // Teal - Block
+        return '#666666'; // Gray - colorless starter
       case CardType.HISS:
-        return '#FFE66D'; // Yellow - Utility
+        return '#666666'; // Gray - colorless starter
       case CardType.VENOM:
-        return '#00FF00'; // Bright Green - Enhanced Damage
+        return '#00FF64'; // Adaptation green - Enhanced Damage
       case CardType.CONSTRICT:
-        return '#0099FF'; // Bright Blue - Enhanced Block
+        return '#3296FF'; // Adaptation blue - Enhanced Block
       case CardType.MOLT:
-        return '#BB86FC'; // Purple - Enhanced Utility
+        return '#BB86FC'; // Adaptation violet - Enhanced Utility
       default:
         return '#FFFFFF'; // White fallback
     }

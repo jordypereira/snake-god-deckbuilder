@@ -12,6 +12,7 @@ export class UIRenderer {
   private parallaxOffset: number = 0;
   private consoleMessage: string = 'The serpent waits for the first encounter.';
   private awaitingShedSelection: boolean = false;
+  private isDeckOpen: boolean = false;
 
   constructor(gameManager: GameManager, container: string | HTMLElement) {
     this.gameManager = gameManager;
@@ -73,6 +74,10 @@ export class UIRenderer {
     this.gameManager.on('gameReset', () => {
       this.awaitingShedSelection = false;
       this.consoleMessage = 'A new serpent awakens.';
+      this.render();
+    });
+    this.gameManager.on('readyToFight', () => {
+      this.consoleMessage = 'The next node awaits. Start when ready.';
       this.render();
     });
     this.gameManager.on('pauseChanged', (data) => {
@@ -163,10 +168,7 @@ export class UIRenderer {
         ? `${this.generateMainScreenHTML()}${this.generateRestSelectionHTML()}`
         : this.generateMainScreenHTML();
 
-    return this.gameManager.getIsPaused()
-      ? `${baseScreen}${this.generatePauseOverlayHTML()}`
-      : baseScreen;
-
+    return baseScreen;
   }
 
   private generateMainScreenHTML(): string {
@@ -199,7 +201,7 @@ export class UIRenderer {
           </div>
           <div class="game-modes">
             <span>${isBoss ? 'Boss node' : 'Battle node'}</span>
-            <button id="pause-btn" class="btn pause-btn">${this.gameManager.getIsPaused() ? 'RESUME' : 'PAUSE'}</button>
+            <button id="pause-btn" class="pause-btn" aria-label="${this.gameManager.getIsPaused() ? 'Resume run' : 'Pause run'}">${this.gameManager.getIsPaused() ? '▶' : '❚❚'}</button>
           </div>
         </div>
 
@@ -226,8 +228,8 @@ export class UIRenderer {
           <div class="arena">
             <!-- Snake Side -->
             <div class="arena-side snake-side">
-              <div class="snake-container">
-                <div class="snake ${snakeVisual.isFanged ? 'fanged' : ''} ${snakeVisual.isArmored ? 'armored' : ''}" style="background-color: ${snake.getColorHex()}; transform: scale(${snakeScale}); ${snake.isCurrentlySlithering() ? 'animation: slither 0.6s ease-in-out infinite;' : ''}"></div>
+              <div class="snake-sprite ${snakeVisual.isFanged ? 'fanged' : ''} ${snakeVisual.isArmored ? 'armored' : ''} ${snake.isCurrentlySlithering() ? 'slithering' : ''}" style="color: ${snake.getColorHex()}; filter: drop-shadow(0 0 10px ${snake.getColorHex()}); transform: scale(${snakeScale});">
+                🐍
               </div>
               <div class="snake-info">
                 <p>The Snake</p>
@@ -254,15 +256,21 @@ export class UIRenderer {
           <div class="status">
             <p><strong>Phase:</strong> ${gameState}</p>
             ${this.generatePhaseActions()}
+            ${gameState === GameState.READY ? '<button id="start-fight-btn" class="btn btn-start-fight">⚔️ START FIGHT</button>' : ''}
           </div>
         </div>
 
         <!-- Deck Info -->
         <div class="deck-info">
-          <p>Remaining Cards: <strong>${this.gameManager.getDeck().getRemainingCount()}</strong></p>
+          <div class="deck-summary">
+            <div class="deck-color-swatch" style="background-color: ${snake.getColorHex()};"></div>
+            <p><strong>${this.gameManager.getDeck().getTotalCardCount()}</strong> cards</p>
+            <button id="deck-inspect-btn" class="btn deck-inspect-btn">${this.isDeckOpen ? '▲ DECK' : '▼ DECK'}</button>
+          </div>
           <div class="composition">
             ${this.generateCompositionBar()}
           </div>
+          ${this.isDeckOpen || (gameState !== GameState.BATTLE && gameState !== GameState.TRANSITION) ? this.generateDeckPreviewHTML('Deck Inspector') : ''}
         </div>
 
         <!-- Console Log -->
@@ -282,6 +290,14 @@ export class UIRenderer {
   private generateRewardSelectionHTML(): string {
     const mutations = this.gameManager.getAvailableMutations();
     const battleCount = this.gameManager.getBattleCount();
+    const snake = this.gameManager.getSnake();
+    const goldReward = this.gameManager.getLastGoldReward();
+    const totalGold = this.gameManager.getGold();
+    const isCombatReward = battleCount > 0;
+    const rewardTitle = isCombatReward ? 'VICTORY' : 'OPENING BOON';
+    const rewardSubtitle = isCombatReward
+      ? `Battle ${battleCount} cleared. Claim your loot.`
+      : 'Choose your opening evolution.';
 
     const mutationCards = mutations.map((m) => `
       <div class="mutation-option" data-mutation-id="${m.id}">
@@ -298,27 +314,28 @@ export class UIRenderer {
     return `
       <div class="mutation-overlay">
         <div class="mutation-selection">
-          <h1>MUTATION UNLOCKED</h1>
-          <p class="mutation-subtitle">Battle ${battleCount} complete. Choose your evolution.</p>
+          <h1>${rewardTitle}</h1>
+          <p class="mutation-subtitle">${rewardSubtitle}</p>
+          <p class="reward-health">HP ${snake.getHealth()}/${snake.getMaxHealth()}</p>
+          ${isCombatReward ? `
+            <div class="loot-table">
+              <div class="loot-row">
+                <span class="loot-label">Gold Reward</span>
+                <span class="loot-value">+${goldReward}g</span>
+              </div>
+              <div class="loot-row">
+                <span class="loot-label">Card Reward</span>
+                <span class="loot-value">Choose 1</span>
+              </div>
+              <div class="loot-row total">
+                <span class="loot-label">Total Gold</span>
+                <span class="loot-value">${totalGold}g</span>
+              </div>
+            </div>
+          ` : ''}
           ${this.generateDeckPreviewHTML('Current Deck')}
           <div class="mutation-options">
             ${mutationCards}
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  private generatePauseOverlayHTML(): string {
-    return `
-      <div class="pause-overlay">
-        <div class="pause-panel">
-          <p class="pause-kicker">ESC toggles pause</p>
-          <h1>PAUSED</h1>
-          <p class="mutation-subtitle">Card timers, enemy actions, and slither motion are frozen.</p>
-          <div class="actions pause-actions">
-            <button id="resume-btn" class="btn btn-primary">RESUME</button>
-            <button id="quit-btn" class="btn">QUIT</button>
           </div>
         </div>
       </div>
@@ -330,6 +347,7 @@ export class UIRenderer {
       return this.generateShedSelectionHTML();
     }
 
+    const snake = this.gameManager.getSnake();
     const actions = this.gameManager.getAvailableRestSites();
     const actionCards = actions.map((action) => `
       <div class="mutation-option">
@@ -347,6 +365,7 @@ export class UIRenderer {
         <div class="mutation-selection">
           <h1>SHEDDING SITE</h1>
           <p class="mutation-subtitle">Choose one recovery path before the next node.</p>
+          <p class="reward-health">HP ${snake.getHealth()}/${snake.getMaxHealth()}</p>
           ${this.generateDeckPreviewHTML('Current Deck')}
           <div class="mutation-options">
             ${actionCards}
@@ -357,6 +376,7 @@ export class UIRenderer {
   }
 
   private generateShedSelectionHTML(): string {
+    const snake = this.gameManager.getSnake();
     const deckCards = this.gameManager.getDeck().getDeckCards();
     const cardOptions = deckCards.map((card) => `
       <div class="mutation-option">
@@ -375,6 +395,7 @@ export class UIRenderer {
         <div class="mutation-selection">
           <h1>SHED A CARD</h1>
           <p class="mutation-subtitle">Choose one card to remove from the run.</p>
+          <p class="reward-health">HP ${snake.getHealth()}/${snake.getMaxHealth()}</p>
           ${this.generateDeckPreviewHTML('Current Deck')}
           <div class="mutation-options">
             ${cardOptions}
@@ -437,8 +458,8 @@ export class UIRenderer {
             </h1>
             
             <div class="final-form-section">
-              <div class="final-snake ${snakeVisual.isFanged ? 'fanged' : ''} ${snakeVisual.isArmored ? 'armored' : ''}" 
-                   style="background-color: ${snakeColor};"></div>
+            <div class="final-snake-sprite ${snakeVisual.isFanged ? 'fanged' : ''} ${snakeVisual.isArmored ? 'armored' : ''}" 
+                 style="color: ${snakeColor}; filter: drop-shadow(0 0 16px ${snakeColor});">🐍</div>
               <p class="final-form-title">"${flavor}"</p>
             </div>
 
@@ -502,8 +523,7 @@ export class UIRenderer {
    * Generate enemy display HTML
    */
   private generateEnemyHTML(enemy: Enemy): string {
-    const healthSegments = Math.ceil(enemy.getMaxHealth() / 20); // Segmented health bar
-    const filledSegments = Math.ceil((enemy.getHealth() / enemy.getMaxHealth()) * healthSegments);
+    const healthPercent = Math.max(0, Math.min(100, (enemy.getHealth() / enemy.getMaxHealth()) * 100));
     const intent = enemy.getCurrentIntent();
     const intentValue = intent === EnemyIntent.ATTACK ? `${enemy.getDamage()} DMG` : `+${enemy.getDamage()} NEXT ATK`;
 
@@ -511,14 +531,7 @@ export class UIRenderer {
       <div class="enemy-display">
         <div class="enemy-health">
           <div class="health-bar-container">
-            ${Array(healthSegments)
-              .fill(0)
-              .map(
-                (_, i) => `
-              <div class="health-segment ${i < filledSegments ? 'filled' : 'empty'}"></div>
-            `
-              )
-              .join('')}
+            <div class="health-fill" style="width: ${healthPercent}%;"></div>
           </div>
           <p class="health-text">${enemy.getHealth()}/${enemy.getMaxHealth()}</p>
         </div>
@@ -569,6 +582,10 @@ export class UIRenderer {
   private generatePhaseActions(): string {
     const gameState = this.gameManager.getGameState();
 
+    if (gameState === GameState.READY) {
+      return '<p class="action-text">Next node prepared. Strike when ready.</p>';
+    }
+
     if (gameState === GameState.BATTLE) {
       return '<p class="action-text">Cards resolve automatically. Watch the encounter unfold.</p>';
     }
@@ -593,21 +610,19 @@ export class UIRenderer {
    */
   private generateCompositionBar(): string {
     const counts = this.gameManager.getDeck().getSpecializedCounts();
-    const total = Math.max(1, this.gameManager.getDeck().getTotalCardCount());
-    const venomPercent = Math.round((counts.venom / total) * 100);
-    const constrictPercent = Math.round((counts.constrict / total) * 100);
-    const moltingPercent = Math.round((counts.molt / total) * 100);
+    const mutationTotal = counts.venom + counts.constrict + counts.molt;
+    if (mutationTotal === 0) {
+      return '<div class="composition-bar composition-bar--empty"></div>';
+    }
+    const venomPct = Math.round((counts.venom / mutationTotal) * 100);
+    const constrictPct = Math.round((counts.constrict / mutationTotal) * 100);
+    const moltPct = 100 - venomPct - constrictPct;
 
     return `
       <div class="composition-bar">
-        <div class="comp-segment venom" style="width: ${venomPercent}%;" title="Venom ${venomPercent}%"></div>
-        <div class="comp-segment constrict" style="width: ${constrictPercent}%;" title="Constrict ${constrictPercent}%"></div>
-        <div class="comp-segment molting" style="width: ${moltingPercent}%;" title="Molting ${moltingPercent}%"></div>
-      </div>
-      <div class="composition-labels">
-        <span>🟢 ${venomPercent}%</span>
-        <span>🔵 ${constrictPercent}%</span>
-        <span>🟡 ${moltingPercent}%</span>
+        <div class="comp-segment venom" style="width: ${venomPct}%;" title="Venom ${counts.venom}"></div>
+        <div class="comp-segment constrict" style="width: ${constrictPct}%;" title="Constrict ${counts.constrict}"></div>
+        <div class="comp-segment molting" style="width: ${moltPct}%;" title="Molt ${counts.molt}"></div>
       </div>
     `;
   }
@@ -665,23 +680,25 @@ export class UIRenderer {
     if (rebirthBtn) {
       rebirthBtn.addEventListener('click', () => {
         this.gameManager.reset();
-        this.gameManager.startBattle();
+        this.gameManager.startRun();
       });
     }
 
-    const resumeBtn = document.getElementById('resume-btn');
-    if (resumeBtn) {
-      resumeBtn.addEventListener('click', () => {
-        this.gameManager.setPaused(false);
+    const deckInspectBtn = document.getElementById('deck-inspect-btn');
+    if (deckInspectBtn) {
+      deckInspectBtn.addEventListener('click', () => {
+        this.isDeckOpen = !this.isDeckOpen;
+        this.render();
       });
     }
 
-    const quitBtn = document.getElementById('quit-btn');
-    if (quitBtn) {
-      quitBtn.addEventListener('click', () => {
-        this.gameManager.quitRun();
+    const startFightBtn = document.getElementById('start-fight-btn');
+    if (startFightBtn) {
+      startFightBtn.addEventListener('click', () => {
+        this.gameManager.confirmStartBattle();
       });
     }
+
   }
 
   private describeRestAction(action: RestSiteAction, healAmount?: number): string {

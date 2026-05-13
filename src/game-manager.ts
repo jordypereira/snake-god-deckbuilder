@@ -15,6 +15,7 @@ export enum GameState {
   REWARD = 'REWARD',           // Choose mutation
   REST = 'REST',               // Choose shedding site (CONSUME/SHED/HARDEN)
   TRANSITION = 'TRANSITION',   // Moving to next zone
+  READY = 'READY',             // Waiting for player to start next fight
   GAME_OVER = 'GAME_OVER',     // Victory/Defeat
 }
 
@@ -48,8 +49,9 @@ interface GameEventMap {
   enemyIntentChanged: { enemy: Enemy };
   mapProgressed: { map: Map };
   enemyActed: { intent: EnemyIntent; damage: number; empower: number };
-  rewardPhase: { mutations: MutationOption[] };
+  rewardPhase: { mutations: MutationOption[]; goldReward: number; totalGold: number };
   restPhase: { sites: RestSiteAction[] };
+  readyToFight: {};
   restActionApplied: { action: RestSiteAction; healAmount?: number; buffs?: Card[] };
   cardRemoved: { cardId: string; removed: boolean; maxHealth: number };
   gameOver: { victory: boolean; quit?: boolean };
@@ -70,12 +72,14 @@ interface MutationDefinition {
 }
 
 const PLAYER_MAX_HEALTH = 40;
-const ENEMY_MAX_HEALTH = 40;
+const ENEMY_MAX_HEALTH = 34;
 const CARD_PLAY_DELAY_MS = 250;
 const BATTLE_START_DELAY_MS = 300;
 const TRANSITION_DELAY_MS = 1200;
 const REST_ACTION_DELAY_MS = 700;
 const SHED_MAX_HP_COST = 4;
+const GOLD_REWARD_MIN = 12;
+const GOLD_REWARD_MAX = 22;
 
 /**
  * GameManager Class - Loop Hero auto-battler logic
@@ -97,6 +101,8 @@ export class GameManager {
   private availableMutations: MutationOption[] = [];
   private availableRestSites: RestSiteAction[] = [RestSiteAction.CONSUME, RestSiteAction.SHED, RestSiteAction.HARDEN];
   private battleCount: number = 0;
+  private gold: number = 0;
+  private lastGoldReward: number = 0;
   private autoPlayInProgress: boolean = false;
   private isPaused: boolean = false;
   private cardsPlayedThisSet: number = 0;
@@ -110,6 +116,16 @@ export class GameManager {
     this.audioManager.resume();
     this.setupEncounter();
     this.calculateSnakeColor();
+  }
+
+  startRun(): void {
+    this.autoPlayInProgress = false;
+    this.currentHand = [];
+    this.cardsPlayedThisSet = 0;
+    this.isPaused = false;
+    this.snake.clearBlock();
+    this.snake.stopSlithering();
+    this.triggerRewardPhase();
   }
 
   /**
@@ -158,7 +174,7 @@ export class GameManager {
    */
   private setupEncounter(): void {
     this.isBossPhase = this.map.getIsBossBattle();
-    this.enemy = new Enemy(ENEMY_MAX_HEALTH, this.map.getCurrentNodeIndex() * 2);
+    this.enemy = new Enemy(ENEMY_MAX_HEALTH, this.map.getCurrentNodeIndex());
 
     if (this.isBossPhase) {
       debugLog('Boss encounter initialized');
@@ -181,11 +197,12 @@ export class GameManager {
    */
   private calculateSnakeColor(): void {
     const counts = this.deck.getSpecializedCounts();
+    const specializedTotal = counts.venom + counts.constrict + counts.molt;
     this.snake.morphBySpecializations(
       counts.venom,
       counts.constrict,
       counts.molt,
-      this.deck.getTotalCardCount()
+      specializedTotal
     );
     debugLog(`Snake color updated: ${this.snake.getColorHex()}`);
     this.emit('snakeColorChanged', { color: this.snake.getColorHex() });
@@ -357,7 +374,7 @@ export class GameManager {
       } else {
         // Regular enemy defeated - move to reward phase
         this.battleCount++;
-        this.triggerRewardPhase();
+        this.triggerRewardPhase(true);
       }
     } else {
       // Battle continues - start new turn
@@ -368,12 +385,27 @@ export class GameManager {
   /**
    * Trigger reward phase (mutation selection)
    */
-  private triggerRewardPhase(): void {
+  private triggerRewardPhase(fromCombat: boolean = false): void {
     this.gameState = GameState.REWARD;
+    this.currentHand = [];
+    this.cardsPlayedThisSet = 0;
+    this.snake.stopSlithering();
+
+    if (fromCombat) {
+      this.lastGoldReward = GOLD_REWARD_MIN + Math.floor(Math.random() * (GOLD_REWARD_MAX - GOLD_REWARD_MIN + 1));
+      this.gold += this.lastGoldReward;
+    } else {
+      this.lastGoldReward = 0;
+    }
+
     this.audioManager.setPhase('PLANNING');
     this.generateMutationOptions();
     debugLog('Showing mutation choices...');
-    this.emit('rewardPhase', { mutations: this.availableMutations });
+    this.emit('rewardPhase', {
+      mutations: this.availableMutations,
+      goldReward: this.lastGoldReward,
+      totalGold: this.gold,
+    });
   }
 
   /**
@@ -446,7 +478,12 @@ export class GameManager {
     this.calculateSnakeColor();
     this.availableMutations = [];
 
-    // Move to rest phase
+    // Skip rest site before the very first battle
+    if (this.battleCount === 0) {
+      this.startBattle();
+      return;
+    }
+
     this.triggerRestPhase();
   }
 
@@ -556,7 +593,13 @@ export class GameManager {
     this.map.progressNode();
     this.setupEncounter();
 
-    // Start new battle
+    // Wait for player to confirm
+    this.gameState = GameState.READY;
+    this.emit('readyToFight', {});
+  }
+
+  confirmStartBattle(): void {
+    if (this.gameState !== GameState.READY) return;
     this.startBattle();
   }
 
@@ -660,6 +703,14 @@ export class GameManager {
     return this.battleCount;
   }
 
+  getGold(): number {
+    return this.gold;
+  }
+
+  getLastGoldReward(): number {
+    return this.lastGoldReward;
+  }
+
   getAvailableRestSites(): RestSiteAction[] {
     return [...this.availableRestSites];
   }
@@ -760,6 +811,8 @@ export class GameManager {
     this.turn = 0;
     this.isBossPhase = false;
     this.battleCount = 0;
+    this.gold = 0;
+    this.lastGoldReward = 0;
     this.availableMutations = [];
     this.isPaused = false;
 

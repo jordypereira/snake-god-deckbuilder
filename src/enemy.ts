@@ -38,9 +38,9 @@ export class Enemy {
     this.intent = intents[Math.floor(Math.random() * intents.length)];
 
     if (this.intent === EnemyIntent.ATTACK) {
-      this.damage = 8 + Math.floor(Math.random() * 3) + this.damageScaling + this.pendingEmpower;
+      this.damage = 6 + Math.floor(Math.random() * 3) + this.damageScaling + this.pendingEmpower;
     } else {
-      this.damage = 4;
+      this.damage = 3;
     }
 
     this.cardCountdown = 2;

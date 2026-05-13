@@ -19,7 +19,7 @@ function initializeGame(): void {
 
   // Start the game
   uiRenderer.render();
-  gameManager.startBattle();
+  gameManager.startRun();
 }
 
 // Initialize when DOM is ready

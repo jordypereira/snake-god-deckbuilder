@@ -384,20 +384,16 @@ body {
 
 /* SNAKE DISPLAY IN ARENA */
 
-.snake-container {
+.snake-sprite {
+  font-size: 72px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100px;
-  height: 100px;
+  transition: transform 0.3s ease, filter 0.3s ease;
 }
 
-.snake {
-  width: 80px;
-  height: 80px;
-  border: 3px solid var(--pixel-text);
-  box-shadow: 0 0 15px currentColor, inset 0 0 8px rgba(255, 255, 255, 0.2);
-  position: relative;
+.snake-sprite.slithering {
+  animation: slither 0.6s ease-in-out infinite;
 }
 
 .snake-info {
@@ -434,29 +430,19 @@ body {
 }
 
 .health-bar-container {
-  display: flex;
-  gap: 2px;
+  position: relative;
   margin-bottom: 5px;
   background: var(--pixel-bg-dark);
   padding: 3px;
   border: 2px solid var(--pixel-border);
+  height: 18px;
 }
 
-.health-segment {
-  flex: 1;
-  height: 12px;
-  background: var(--pixel-bg-mid);
-  border: 1px solid var(--pixel-border);
-  transition: background 0.2s ease;
-}
-
-.health-segment.filled {
+.health-fill {
+  height: 100%;
+  transition: width 0.25s ease;
   background: #ff0000;
   box-shadow: inset 0 0 4px rgba(255, 0, 0, 0.5);
-}
-
-.health-segment.empty {
-  background: var(--pixel-bg-dark);
 }
 
 .health-text {
@@ -779,13 +765,23 @@ body {
 }
 
 .pause-btn {
-  min-width: 110px;
-  border-color: #ffcc00;
+  width: 42px;
+  height: 42px;
+  border: 2px solid #ffcc00;
+  background: var(--pixel-bg-mid);
   color: #ffcc00;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-family: 'Courier New', monospace;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .pause-btn:hover {
   box-shadow: 0 0 15px rgba(255, 204, 0, 0.5);
+  transform: scale(1.05);
 }
 
 /* ============================================
@@ -798,9 +794,43 @@ body {
   border: 3px solid var(--pixel-border);
 }
 
+.deck-summary {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
 .deck-info p {
   margin: 0 0 10px 0;
   color: var(--pixel-text-dim);
+}
+
+.deck-summary p {
+  margin: 0;
+  color: var(--pixel-text-dim);
+}
+
+.deck-color-swatch {
+  width: 32px;
+  height: 32px;
+  border: 2px solid var(--pixel-border);
+  box-shadow: 0 0 12px rgba(0, 255, 0, 0.3);
+}
+
+.btn-start-fight {
+  margin-top: 12px;
+  width: 100%;
+  border-color: #ff6600;
+  color: #ff6600;
+  font-size: 16px;
+  letter-spacing: 2px;
+  animation: blink 1s infinite;
+}
+
+.btn-start-fight:hover {
+  box-shadow: 0 0 20px rgba(255, 102, 0, 0.6);
+  animation: none;
 }
 
 .composition {
@@ -828,17 +858,17 @@ body {
 }
 
 .comp-segment.venom {
-  background-color: #00ff00;
+  background-color: #00ff64;
   color: #000;
 }
 
 .comp-segment.constrict {
-  background-color: #0099ff;
+  background-color: #3296ff;
   color: #fff;
 }
 
 .comp-segment.molting {
-  background-color: #ffff00;
+  background-color: #bb86fc;
   color: #000;
 }
 
@@ -896,8 +926,69 @@ body {
   padding: 20px;
 }
 
+.reward-health {
+  margin: 0 0 14px 0;
+  color: #ff8a80;
+  font-weight: bold;
+  text-align: center;
+}
+
+.deck-preview {
+  margin-top: 14px;
+  padding: 12px;
+  background: var(--pixel-bg-mid);
+  border: 2px solid var(--pixel-border);
+}
+
+.deck-preview-title {
+  margin: 0 0 8px 0;
+  color: var(--pixel-accent);
+}
+
+.deck-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.deck-chip {
+  padding: 5px 8px;
+  border: 1px solid currentColor;
+  background: rgba(0, 0, 0, 0.25);
+  font-size: 11px;
+}
+
+.deck-chip-strike,
+.deck-chip-coil,
+.deck-chip-hiss {
+  color: #666666;
+  border-color: #666666;
+}
+
+.deck-chip-venom {
+  color: #00ff64;
+}
+
+.deck-chip-constrict {
+  color: #3296ff;
+}
+
+.deck-chip-molt {
+  color: #bb86fc;
+}
+
+@media (max-width: 700px) {
+  .deck-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .deck-color-swatch {
+    width: 100%;
+    height: 20px;
+  }
+}
+
 .pause-overlay {
-  position: fixed;
   inset: 0;
   background: rgba(4, 8, 20, 0.88);
   display: flex;
@@ -962,21 +1053,25 @@ body {
 }
 
 .deck-chip-strike,
-.deck-chip-venom {
-  border-color: #ff6b6b;
-  color: #ff9b9b;
-}
-
 .deck-chip-coil,
-.deck-chip-constrict {
-  border-color: #66ccff;
-  color: #9bdbff;
+.deck-chip-hiss {
+  border-color: #666666;
+  color: #666666;
 }
 
-.deck-chip-hiss,
+.deck-chip-venom {
+  border-color: #00ff64;
+  color: #86ffb1;
+}
+
+.deck-chip-constrict {
+  border-color: #3296ff;
+  color: #9bc9ff;
+}
+
 .deck-chip-molt {
-  border-color: #ffe66d;
-  color: #fff2a8;
+  border-color: #bb86fc;
+  color: #dbbeff;
 }
 
 .pause-actions {
@@ -1000,6 +1095,42 @@ body {
   font-size: 16px;
   color: var(--pixel-text);
   margin-bottom: 30px;
+}
+
+.loot-table {
+  margin: 0 auto 20px auto;
+  max-width: 460px;
+  border: 2px solid var(--pixel-border);
+  background: rgba(10, 14, 39, 0.75);
+}
+
+.loot-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(0, 255, 0, 0.25);
+}
+
+.loot-row:last-child {
+  border-bottom: none;
+}
+
+.loot-row.total {
+  background: rgba(0, 255, 100, 0.1);
+}
+
+.loot-label {
+  color: var(--pixel-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 12px;
+}
+
+.loot-value {
+  color: var(--pixel-accent);
+  font-weight: bold;
+  font-size: 13px;
 }
 
 .mutation-options {
