@@ -2,8 +2,10 @@ import { Card, CardType } from './card';
 import { Deck } from './deck';
 import { Snake } from './snake';
 import { Enemy, EnemyIntent } from './enemy';
-import { Map, NodeType } from './map';
+import { Map } from './map';
 import { AudioManager } from './audio-manager';
+import { debugLog } from './debug';
+import { createStarterDeck } from './starter-deck';
 
 /**
  * Game State Enum - Loop Hero style progression
@@ -36,6 +38,26 @@ export interface MutationOption {
   description: string;
 }
 
+interface GameEventMap {
+  battleStarted: { turn: number; isBoss: boolean };
+  cardsDrawn: { cards: Card[] };
+  phaseChanged: { phase: GameState };
+  cardPlayed: { card: Card; index: number; reactiveTriggered?: boolean };
+  snakeColorChanged: { color: string };
+  distanceUpdated: { distance: number };
+  enemyIntentChanged: { enemy: Enemy };
+  mapProgressed: { map: Map };
+  enemyActed: { intent: EnemyIntent; damage: number; empower: number };
+  rewardPhase: { mutations: MutationOption[] };
+  restPhase: { sites: RestSiteAction[] };
+  restActionApplied: { action: RestSiteAction; healAmount?: number; buffs?: Card[] };
+  cardRemoved: { cardId: string; removed: boolean; maxHealth: number };
+  gameOver: { victory: boolean; quit?: boolean };
+  victory: { distanceTraveled: number; turn: number };
+  gameReset: {};
+  pauseChanged: { isPaused: boolean };
+}
+
 type MutationCardType = CardType.VENOM | CardType.CONSTRICT | CardType.MOLT;
 
 interface MutationDefinition {
@@ -55,21 +77,6 @@ const TRANSITION_DELAY_MS = 1200;
 const REST_ACTION_DELAY_MS = 700;
 const SHED_MAX_HP_COST = 4;
 
-function createStarterDeck(): Card[] {
-  return [
-    new Card('strike1', 'Strike', CardType.STRIKE, 6, 'Deal 6 damage.'),
-    new Card('strike2', 'Strike', CardType.STRIKE, 6, 'Deal 6 damage.'),
-    new Card('strike3', 'Strike', CardType.STRIKE, 6, 'Deal 6 damage.'),
-    new Card('strike4', 'Strike', CardType.STRIKE, 6, 'Deal 6 damage.'),
-    new Card('coil1', 'Coil', CardType.COIL, 6, 'Gain 6 block.'),
-    new Card('coil2', 'Coil', CardType.COIL, 6, 'Gain 6 block.'),
-    new Card('coil3', 'Coil', CardType.COIL, 6, 'Gain 6 block.'),
-    new Card('coil4', 'Coil', CardType.COIL, 6, 'Gain 6 block.'),
-    new Card('hiss1', 'Hiss', CardType.HISS, 0, 'Draw 1 card.'),
-    new Card('hiss2', 'Hiss', CardType.HISS, 0, 'Draw 1 card.'),
-  ];
-}
-
 /**
  * GameManager Class - Loop Hero auto-battler logic
  */
@@ -84,7 +91,9 @@ export class GameManager {
   private distanceTraveled: number = 0;
   private turn: number = 0;
   private isBossPhase: boolean = false;
-  private eventCallbacks: { [key: string]: (data: any) => void } = {};
+  private eventCallbacks: Partial<{
+    [K in keyof GameEventMap]: Array<(data: GameEventMap[K]) => void>;
+  }> = {};
   private availableMutations: MutationOption[] = [];
   private availableRestSites: RestSiteAction[] = [RestSiteAction.CONSUME, RestSiteAction.SHED, RestSiteAction.HARDEN];
   private battleCount: number = 0;
@@ -108,7 +117,7 @@ export class GameManager {
    */
   startBattle(): void {
     this.turn++;
-    console.log(`=== BATTLE ${this.turn} ===`);
+    debugLog(`=== BATTLE ${this.turn} ===`);
     this.gameState = GameState.BATTLE;
     this.autoPlayInProgress = false;
     this.currentHand = [];
@@ -118,7 +127,7 @@ export class GameManager {
     this.isBossPhase = this.map.getIsBossBattle();
     if (this.isBossPhase) {
       this.audioManager.setPhase('ACTION'); // Boss uses action phase
-      console.log('BOSS ENCOUNTER!');
+      debugLog('BOSS ENCOUNTER!');
     } else {
       this.audioManager.setPhase('ACTION');
     }
@@ -152,7 +161,7 @@ export class GameManager {
     this.enemy = new Enemy(ENEMY_MAX_HEALTH, this.map.getCurrentNodeIndex() * 2);
 
     if (this.isBossPhase) {
-      console.log('Boss encounter initialized');
+      debugLog('Boss encounter initialized');
     }
   }
 
@@ -162,7 +171,7 @@ export class GameManager {
   private drawCards(count: number = 3, append: boolean = false): Card[] {
     const drawnCards = this.deck.draw(count);
     this.currentHand = append ? [...this.currentHand, ...drawnCards] : drawnCards;
-    console.log(`Drew cards: ${drawnCards.map((c) => c.name).join(', ')}`);
+    debugLog(`Drew cards: ${drawnCards.map((c) => c.name).join(', ')}`);
     this.emit('cardsDrawn', { cards: this.currentHand });
     return drawnCards;
   }
@@ -178,7 +187,7 @@ export class GameManager {
       counts.molt,
       this.deck.getTotalCardCount()
     );
-    console.log(`Snake color updated: ${this.snake.getColorHex()}`);
+    debugLog(`Snake color updated: ${this.snake.getColorHex()}`);
     this.emit('snakeColorChanged', { color: this.snake.getColorHex() });
   }
 
@@ -189,7 +198,7 @@ export class GameManager {
     if (this.autoPlayInProgress || this.gameState !== GameState.BATTLE) return;
     this.autoPlayInProgress = true;
 
-    console.log('Auto-playing cards...');
+    debugLog('Auto-playing cards...');
 
     while (this.currentHand.length > 0) {
       if (this.gameState !== GameState.BATTLE) {
@@ -201,7 +210,7 @@ export class GameManager {
       
       // Check if enemy is already defeated
       if (!this.enemy.isAlive()) {
-        console.log('Enemy defeated during card sequence!');
+        debugLog('Enemy defeated during card sequence!');
         this.snake.stopSlithering();
         await this.delay(CARD_PLAY_DELAY_MS);
         this.triggerRewardPhase();
@@ -261,10 +270,10 @@ export class GameManager {
     const damage = resolvedIntent.damage;
 
     if (damage > 0) {
-      console.log(`Enemy attacks for ${damage} damage!`);
+      debugLog(`Enemy attacks for ${damage} damage!`);
       this.snake.takeDamage(damage);
     } else {
-      console.log(`Enemy empowers its next strike by ${resolvedIntent.empower}!`);
+      debugLog(`Enemy empowers its next strike by ${resolvedIntent.empower}!`);
     }
 
     this.enemy.randomizeIntent();
@@ -276,7 +285,7 @@ export class GameManager {
    * Play a single card with reactive bonus check
    */
   private playCard(card: Card, index: number): void {
-    console.log(`Playing card [${index + 1}]: ${card.name} (${card.type}) - Power: ${card.power}`);
+    debugLog(`Playing card [${index + 1}]: ${card.name} (${card.type}) - Power: ${card.power}`);
     this.audioManager.playCrunch();
 
     if (this.cardsPlayedThisSet === 0) {
@@ -291,7 +300,7 @@ export class GameManager {
     const enemyIsAttacking = this.enemy.getCurrentIntent() === EnemyIntent.ATTACK;
     if (card.isReactive && enemyIsAttacking) {
       reactiveTriggered = true;
-      console.log(`  ⚡ REACTIVE BONUS TRIGGERED! Enemy is attacking!`);
+      debugLog(`  ⚡ REACTIVE BONUS TRIGGERED! Enemy is attacking!`);
     }
 
     // Apply card effect based on type
@@ -300,7 +309,7 @@ export class GameManager {
       case CardType.VENOM:
         damage = card.power;
         if (reactiveTriggered) damage += card.reactiveBonus;
-        console.log(`  → ${card.name} deals ${damage} damage!`);
+        debugLog(`  → ${card.name} deals ${damage} damage!`);
         this.enemy.takeDamage(damage);
         break;
 
@@ -308,16 +317,16 @@ export class GameManager {
       case CardType.CONSTRICT:
         healing = card.power;
         if (reactiveTriggered) healing += card.reactiveBonus;
-        console.log(`  → ${card.name} grants ${healing} block!`);
+        debugLog(`  → ${card.name} grants ${healing} block!`);
         this.snake.gainBlock(healing);
         break;
 
       case CardType.HISS:
       case CardType.MOLT:
-        console.log(`  → ${card.name} draws 1 card!`);
+        debugLog(`  → ${card.name} draws 1 card!`);
         this.drawCards(1, true);
         if (reactiveTriggered) {
-          console.log(`  → Bonus effect: +${card.reactiveBonus}`);
+          debugLog(`  → Bonus effect: +${card.reactiveBonus}`);
         }
         break;
     }
@@ -332,7 +341,7 @@ export class GameManager {
   private resolveBattle(): void {
     if (!this.snake.isAlive()) {
       this.gameState = GameState.GAME_OVER;
-      console.log('Snake defeated! GAME OVER!');
+      debugLog('Snake defeated! GAME OVER!');
       this.audioManager.setPhase('PLANNING');
       this.audioManager.playDeathDirge();
       this.emit('gameOver', { victory: false });
@@ -341,7 +350,7 @@ export class GameManager {
       if (this.isBossPhase) {
         // Boss defeated - victory!
         this.gameState = GameState.GAME_OVER;
-        console.log('Boss Defeated! Victory!');
+        debugLog('Boss Defeated! Victory!');
         this.audioManager.setPhase('PLANNING');
         this.audioManager.playVictoryFanfare();
         this.emit('victory', { distanceTraveled: this.distanceTraveled, turn: this.turn });
@@ -363,7 +372,7 @@ export class GameManager {
     this.gameState = GameState.REWARD;
     this.audioManager.setPhase('PLANNING');
     this.generateMutationOptions();
-    console.log('Showing mutation choices...');
+    debugLog('Showing mutation choices...');
     this.emit('rewardPhase', { mutations: this.availableMutations });
   }
 
@@ -432,7 +441,7 @@ export class GameManager {
       return;
     }
 
-    console.log(`Applying mutation: ${mutation.name}`);
+    debugLog(`Applying mutation: ${mutation.name}`);
     this.deck.addCard(mutation.card);
     this.calculateSnakeColor();
     this.availableMutations = [];
@@ -447,7 +456,7 @@ export class GameManager {
   private triggerRestPhase(): void {
     this.gameState = GameState.REST;
     this.audioManager.setPhase('PLANNING');
-    console.log('Showing rest site options...');
+    debugLog('Showing rest site options...');
     this.emit('restPhase', { sites: this.availableRestSites });
   }
 
@@ -455,24 +464,24 @@ export class GameManager {
    * Apply rest site action
    */
   applyRestAction(action: RestSiteAction): void {
-    console.log(`Applying rest action: ${action}`);
+    debugLog(`Applying rest action: ${action}`);
 
     switch (action) {
       case RestSiteAction.CONSUME:
         const healAmount = Math.max(1, Math.floor(this.snake.getMissingHealth() * 0.25));
         this.snake.heal(healAmount);
-        console.log(`Healed ${healAmount} HP`);
+        debugLog(`Healed ${healAmount} HP`);
         this.emit('restActionApplied', { action, healAmount });
         break;
 
       case RestSiteAction.SHED:
-        console.log('Shedding (card removal) - UI will handle deck selection');
+        debugLog('Shedding (card removal) - UI will handle deck selection');
         this.emit('restActionApplied', { action });
         return; // Wait for UI to select card
 
       case RestSiteAction.HARDEN:
         const buffs = this.buffRandomCards(2, 2);
-        console.log(`Buffed ${buffs.length} cards`);
+        debugLog(`Buffed ${buffs.length} cards`);
         this.emit('restActionApplied', { action, buffs });
         break;
     }
@@ -485,7 +494,7 @@ export class GameManager {
    * Remove a card from the deck (SHED action callback)
    */
   removeCardFromDeck(cardId: string): void {
-    console.log(`Removing card: ${cardId}`);
+    debugLog(`Removing card: ${cardId}`);
     const removed = this.deck.removeCard(cardId);
     if (removed) {
       this.snake.reduceMaxHealth(SHED_MAX_HP_COST);
@@ -529,7 +538,7 @@ export class GameManager {
    */
   private async triggerTransition(): Promise<void> {
     this.gameState = GameState.TRANSITION;
-    console.log('Transitioning to next zone...');
+    debugLog('Transitioning to next zone...');
     this.emit('phaseChanged', { phase: GameState.TRANSITION });
 
     // Increase distance traveled
@@ -581,15 +590,21 @@ export class GameManager {
   /**
    * Event emission system
    */
-  on(event: string, callback: (data: any) => void): void {
-    this.eventCallbacks[event] = callback;
+  on<K extends keyof GameEventMap>(event: K, callback: (data: GameEventMap[K]) => void): void {
+    if (!this.eventCallbacks[event]) {
+      this.eventCallbacks[event] = [];
+    }
+
+    this.eventCallbacks[event]!.push(callback);
   }
 
-  private emit(event: string, data: any): void {
-    const callback = this.eventCallbacks[event];
-    if (callback) {
-      callback(data);
+  private emit<K extends keyof GameEventMap>(event: K, data: GameEventMap[K]): void {
+    const callbacks = this.eventCallbacks[event];
+    if (!callbacks) {
+      return;
     }
+
+    callbacks.forEach((callback) => callback(data));
   }
 
   // ===== Getters =====
@@ -735,7 +750,7 @@ export class GameManager {
    * Reset the game to initial state
    */
   reset(): void {
-    console.log('Game Reset - Rebirth!');
+    debugLog('Game Reset - Rebirth!');
     this.snake = new Snake(PLAYER_MAX_HEALTH);
     this.enemy = new Enemy(ENEMY_MAX_HEALTH);
     this.map = new Map();

@@ -1,3 +1,5 @@
+import { debugLog } from './debug';
+
 interface RGB {
   r: number;
   g: number;
@@ -68,7 +70,7 @@ export class Snake {
       b: Math.round(this.baseColor.b + (mutationColor.b - this.baseColor.b) * mutationWeight),
     };
 
-    console.log(`Snake morphed: Fanged=${this.visualState.isFanged}, Armored=${this.visualState.isArmored}`);
+    debugLog(`Snake morphed: Fanged=${this.visualState.isFanged}, Armored=${this.visualState.isArmored}`);
   }
 
   /**
@@ -142,27 +144,6 @@ export class Snake {
 
   getBodyScale(): number {
     return Math.max(0.6, this.maxHealth / 40);
-  }
-
-  /**
-   * Get prescience (reorder actions)
-   */
-  getPrescience(): number {
-    return 0; // Deprecated - no prescience in Loop Hero mode
-  }
-
-  /**
-   * Use prescience
-   */
-  usePrescience(): boolean {
-    return false; // Deprecated
-  }
-
-  /**
-   * Reset prescience for the turn
-   */
-  resetPrescience(): void {
-    // Deprecated
   }
 
   /**

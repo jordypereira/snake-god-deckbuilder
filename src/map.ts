@@ -1,3 +1,5 @@
+import { debugLog } from './debug';
+
 /**
  * Map Node Type
  */
@@ -43,7 +45,7 @@ export class Map {
     this.currentNodeIndex = (this.currentNodeIndex + 1) % this.nodes.length;
     this.totalBattles++;
     this.updateIsBossBattle();
-    console.log(`Progressed to Node ${this.currentNodeIndex + 1}. Total battles: ${this.totalBattles}`);
+    debugLog(`Progressed to Node ${this.currentNodeIndex + 1}. Total battles: ${this.totalBattles}`);
   }
 
   /**

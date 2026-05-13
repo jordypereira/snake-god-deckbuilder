@@ -1,4 +1,5 @@
 import { Card, CardType } from './card';
+import { debugLog } from './debug';
 
 /**
  * Deck Class - Manages the card deck
@@ -109,14 +110,14 @@ export class Deck {
     const activeIndex = this.cards.findIndex((c) => c.id === cardId);
     if (activeIndex !== -1) {
       this.cards.splice(activeIndex, 1);
-      console.log(`Removed card: ${cardId}`);
+      debugLog(`Removed card: ${cardId}`);
       return true;
     }
 
     const discardIndex = this.discardPile.findIndex((c) => c.id === cardId);
     if (discardIndex !== -1) {
       this.discardPile.splice(discardIndex, 1);
-      console.log(`Removed card: ${cardId}`);
+      debugLog(`Removed card: ${cardId}`);
       return true;
     }
     return false;

@@ -1,6 +1,6 @@
-import { Card, CardType } from './card';
 import { Deck } from './deck';
 import { GameManager } from './game-manager';
+import { createStarterDeck } from './starter-deck';
 import { UIRenderer } from './ui';
 
 /**
@@ -12,22 +12,8 @@ function initializeGame(): void {
     throw new Error('Missing #game-root container');
   }
 
-  // Create simplified starter deck: 4 Strike, 4 Coil, 2 Hiss
-  const starterDeck: Card[] = [
-    new Card('strike1', 'Strike', CardType.STRIKE, 6, 'Deal 6 damage.'),
-    new Card('strike2', 'Strike', CardType.STRIKE, 6, 'Deal 6 damage.'),
-    new Card('strike3', 'Strike', CardType.STRIKE, 6, 'Deal 6 damage.'),
-    new Card('strike4', 'Strike', CardType.STRIKE, 6, 'Deal 6 damage.'),
-    new Card('coil1', 'Coil', CardType.COIL, 6, 'Gain 6 block.'),
-    new Card('coil2', 'Coil', CardType.COIL, 6, 'Gain 6 block.'),
-    new Card('coil3', 'Coil', CardType.COIL, 6, 'Gain 6 block.'),
-    new Card('coil4', 'Coil', CardType.COIL, 6, 'Gain 6 block.'),
-    new Card('hiss1', 'Hiss', CardType.HISS, 0, 'Draw 1 card.'),
-    new Card('hiss2', 'Hiss', CardType.HISS, 0, 'Draw 1 card.'),
-  ];
-
   // Create game instances
-  const deck = new Deck(starterDeck);
+  const deck = new Deck(createStarterDeck());
   const gameManager = new GameManager(deck);
   const uiRenderer = new UIRenderer(gameManager, root);
 

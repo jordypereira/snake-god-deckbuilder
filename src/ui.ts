@@ -1,6 +1,6 @@
 import { GameManager, GameState, RestSiteAction } from './game-manager';
 import { Card, CardType } from './card';
-import { EnemyIntent } from './enemy';
+import { Enemy, EnemyIntent } from './enemy';
 import { NodeType } from './map';
 
 /**
@@ -180,6 +180,7 @@ export class UIRenderer {
     const enemy = this.gameManager.getEnemy();
     const hand = this.gameManager.getCurrentHand();
     const snakeVisual = snake.getVisualState();
+    const snakeScale = snake.getBodyScale();
     const volume = Math.round(this.gameManager.getAudioManager().getVolume() * 100);
 
     return `
@@ -195,7 +196,6 @@ export class UIRenderer {
           <div class="volume-control">
             <label>🔊 Volume:</label>
             <input type="range" id="volume-slider" min="0" max="100" value="${volume}" class="volume-slider">
-          const snakeScale = snake.getBodyScale();
           </div>
           <div class="game-modes">
             <span>${isBoss ? 'Boss node' : 'Battle node'}</span>
@@ -227,11 +227,11 @@ export class UIRenderer {
             <!-- Snake Side -->
             <div class="arena-side snake-side">
               <div class="snake-container">
-                <div class="snake ${snakeVisual.isFanged ? 'fanged' : ''} ${snakeVisual.isArmored ? 'armored' : ''}" style="background-color: ${snake.getColorHex()}; ${snake.isCurrentlySlithering() ? 'animation: slither 0.6s ease-in-out infinite;' : ''}"></div>
+                <div class="snake ${snakeVisual.isFanged ? 'fanged' : ''} ${snakeVisual.isArmored ? 'armored' : ''}" style="background-color: ${snake.getColorHex()}; transform: scale(${snakeScale}); ${snake.isCurrentlySlithering() ? 'animation: slither 0.6s ease-in-out infinite;' : ''}"></div>
               </div>
               <div class="snake-info">
                 <p>The Snake</p>
-                  <span>Beat: <strong>${this.gameManager.getCardsPlayedThisSet()}/2</strong></span>
+                <span>Cycle: <strong>${this.gameManager.getCardsPlayedThisSet()}/3</strong></span>
                 <p class="snake-health-display">${snake.getHealth()}/${snake.getMaxHealth()}</p>
               </div>
             </div>
@@ -501,7 +501,7 @@ export class UIRenderer {
   /**
    * Generate enemy display HTML
    */
-  private generateEnemyHTML(enemy: any): string {
+  private generateEnemyHTML(enemy: Enemy): string {
     const healthSegments = Math.ceil(enemy.getMaxHealth() / 20); // Segmented health bar
     const filledSegments = Math.ceil((enemy.getHealth() / enemy.getMaxHealth()) * healthSegments);
     const intent = enemy.getCurrentIntent();

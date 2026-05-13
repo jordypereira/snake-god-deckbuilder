@@ -1,3 +1,5 @@
+import { debugLog } from './debug';
+
 /**
  * Enemy Intent Enum - Simplified
  */
@@ -42,7 +44,7 @@ export class Enemy {
     }
 
     this.cardCountdown = 2;
-    console.log(
+    debugLog(
       `Enemy Intent: ${this.intent}${this.intent === EnemyIntent.ATTACK ? ` (${this.damage} dmg)` : ` (+${this.damage} next attack)`}, Countdown: ${this.cardCountdown}`
     );
   }
@@ -63,7 +65,7 @@ export class Enemy {
    */
   takeDamage(amount: number): void {
     this.health = Math.max(0, this.health - amount);
-    console.log(`Enemy took ${amount} damage! Health: ${this.health}/${this.maxHealth}`);
+    debugLog(`Enemy took ${amount} damage! Health: ${this.health}/${this.maxHealth}`);
   }
 
   /**
@@ -71,13 +73,6 @@ export class Enemy {
    */
   decrementCountdown(): void {
     this.cardCountdown--;
-  }
-
-  /**
-   * Get current intent
-   */
-  getIntent(): EnemyIntent {
-    return this.intent;
   }
 
   /**
