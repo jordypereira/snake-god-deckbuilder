@@ -1,0 +1,35 @@
+{
+  "name": "snake-god-deckbuilder",
+  "version": "0.1.0",
+  "description": "An MVP side-scrolling auto-battle deckbuilder featuring a morphing serpent",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --outdir=dist --format=esm --sourcemap",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run typecheck && tsx --test tests/**/*.test.ts",
+    "dev": "esbuild src/index.ts --bundle --outdir=dist --format=esm --sourcemap --servedir=. --serve=8000",
+    "watch": "esbuild src/index.ts --bundle --outdir=dist --format=esm --sourcemap --watch"
+  },
+  "keywords": [
+    "deckbuilder",
+    "auto-battle",
+    "side-scroller",
+    "typescript",
+    "game"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "esbuild": "^0.20.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.6.3"
+  },
+  "dependencies": {
+    "consola": "^3.2.0"
+  },
+  "volta": {
+    "node": "22.3.0",
+    "npm": "10.8.1"
+  }
+}

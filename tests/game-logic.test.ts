@@ -1,0 +1,239 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+class FakeAudioParam {
+  value = 0;
+
+  setValueAtTime(value: number): void {
+    this.value = value;
+  }
+
+  exponentialRampToValueAtTime(value: number): void {
+    this.value = value;
+  }
+}
+
+class FakeGainNode {
+  gain = new FakeAudioParam();
+
+  connect(): void {}
+
+  disconnect(): void {}
+}
+
+class FakeOscillatorNode {
+  type = 'sine';
+  frequency = new FakeAudioParam();
+
+  connect(): void {}
+
+  disconnect(): void {}
+
+  start(): void {}
+
+  stop(): void {}
+}
+
+class FakeBufferSourceNode {
+  buffer: { getChannelData: () => Float32Array } | null = null;
+  loop = false;
+
+  connect(): void {}
+
+  disconnect(): void {}
+
+  start(): void {}
+
+  stop(): void {}
+}
+
+class FakeBiquadFilterNode {
+  type = 'lowpass';
+  frequency = new FakeAudioParam();
+  Q = { value: 0 };
+
+  connect(): void {}
+
+  disconnect(): void {}
+}
+
+class FakeAudioContext {
+  state: AudioContextState = 'running';
+  currentTime = 0;
+  sampleRate = 44100;
+  destination = {} as AudioDestinationNode;
+
+  createGain(): GainNode {
+    return new FakeGainNode() as unknown as GainNode;
+  }
+
+  createOscillator(): OscillatorNode {
+    return new FakeOscillatorNode() as unknown as OscillatorNode;
+  }
+
+  createBuffer(_channels: number, length: number): AudioBuffer {
+    return {
+      getChannelData: () => new Float32Array(length),
+    } as AudioBuffer;
+  }
+
+  createBufferSource(): AudioBufferSourceNode {
+    return new FakeBufferSourceNode() as unknown as AudioBufferSourceNode;
+  }
+
+  createBiquadFilter(): BiquadFilterNode {
+    return new FakeBiquadFilterNode() as unknown as BiquadFilterNode;
+  }
+
+  resume(): Promise<void> {
+    return Promise.resolve();
+  }
+}
+
+(globalThis as typeof globalThis & {
+  window: {
+    AudioContext: typeof FakeAudioContext;
+    webkitAudioContext: typeof FakeAudioContext;
+  };
+}).window = {
+  AudioContext: FakeAudioContext,
+  webkitAudioContext: FakeAudioContext,
+};
+
+const [{ Card, CardType }, { Deck }, { Snake }, { GameManager, GameState }] = await Promise.all([
+  import('../src/card.ts'),
+  import('../src/deck.ts'),
+  import('../src/snake.ts'),
+  import('../src/game-manager.ts'),
+]);
+
+function createStarterCards() {
+  return [
+    new Card('strike1', 'Strike', CardType.STRIKE, 6, 'Deal 6 damage.'),
+    new Card('strike2', 'Strike', CardType.STRIKE, 6, 'Deal 6 damage.'),
+    new Card('strike3', 'Strike', CardType.STRIKE, 6, 'Deal 6 damage.'),
+    new Card('strike4', 'Strike', CardType.STRIKE, 6, 'Deal 6 damage.'),
+    new Card('coil1', 'Coil', CardType.COIL, 6, 'Gain 6 block.'),
+    new Card('coil2', 'Coil', CardType.COIL, 6, 'Gain 6 block.'),
+    new Card('coil3', 'Coil', CardType.COIL, 6, 'Gain 6 block.'),
+    new Card('coil4', 'Coil', CardType.COIL, 6, 'Gain 6 block.'),
+    new Card('hiss1', 'Hiss', CardType.HISS, 0, 'Draw 1 card.'),
+    new Card('hiss2', 'Hiss', CardType.HISS, 0, 'Draw 1 card.'),
+  ];
+}
+
+test('deck removes cards from draw and discard piles', () => {
+  const deck = new Deck(createStarterCards());
+  const [drawn] = deck.draw(1);
+  deck.discard(drawn);
+
+  assert.equal(deck.removeCard(drawn.id), true);
+  assert.equal(deck.getDeckCards().some((card) => card.id === drawn.id), false);
+});
+
+test('snake morphing enables visual traits and clamps health changes', () => {
+  const snake = new Snake();
+  snake.morphBySpecializations(4, 1, 0, 10);
+  snake.takeDamage(120);
+  snake.heal(999);
+
+  assert.equal(snake.getVisualState().isFanged, true);
+  assert.equal(snake.getHealth(), snake.getMaxHealth());
+  assert.match(snake.getColorHex(), /^#/);
+});
+
+test('game manager starts a battle and draws a frontline', () => {
+  const originalSetTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = (() => 0) as typeof setTimeout;
+
+  try {
+    const manager = new GameManager(new Deck(createStarterCards()));
+    manager.startBattle();
+
+    assert.equal(manager.getGameState(), GameState.BATTLE);
+    assert.equal(manager.getCurrentHand().length, 3);
+  } finally {
+    globalThis.setTimeout = originalSetTimeout;
+  }
+});
+
+test('game manager enemy turn damages the snake when countdown reaches zero', () => {
+  const manager = new GameManager(new Deck(createStarterCards())) as GameManager & {
+    resolveEnemyTurn: () => void;
+  };
+  const enemy = manager.getEnemy() as ReturnType<GameManager['getEnemy']> & {
+    intent: string;
+    damage: number;
+    cardCountdown: number;
+  };
+
+  enemy.intent = 'ATTACK';
+  enemy.damage = 11;
+  enemy.cardCountdown = 0;
+
+  manager.resolveEnemyTurn();
+
+  assert.equal(manager.getSnake().getHealth(), 29);
+});
+
+test('deck remaining count only tracks draw pile while total count tracks identity', () => {
+  const deck = new Deck(createStarterCards());
+  const [drawn] = deck.draw(1);
+  deck.discard(drawn);
+
+  assert.equal(deck.getRemainingCount(), 9);
+  assert.equal(deck.getTotalCardCount(), 10);
+});
+
+test('pause toggles freeze state without changing battle phase', () => {
+  const manager = new GameManager(new Deck(createStarterCards()));
+  const originalSetTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = (() => 0) as typeof setTimeout;
+
+  try {
+    manager.startBattle();
+    manager.setPaused(true);
+
+    assert.equal(manager.getIsPaused(), true);
+    assert.equal(manager.getGameState(), GameState.BATTLE);
+    assert.equal(manager.getSnake().isCurrentlySlithering(), false);
+  } finally {
+    globalThis.setTimeout = originalSetTimeout;
+  }
+});
+
+test('enemy empowers and resets countdown after acting', () => {
+  const manager = new GameManager(new Deck(createStarterCards())) as GameManager & {
+    resolveEnemyTurn: () => void;
+  };
+  const enemy = manager.getEnemy() as ReturnType<GameManager['getEnemy']> & {
+    intent: string;
+    damage: number;
+    cardCountdown: number;
+  };
+
+  enemy.intent = 'EMPOWER';
+  enemy.damage = 4;
+  enemy.cardCountdown = 0;
+
+  manager.resolveEnemyTurn();
+
+  assert.equal(enemy.getPendingEmpower(), 4);
+  assert.equal(enemy.getCardCountdown(), 2);
+});
+
+test('shedding permanently reduces max health', () => {
+  const originalSetTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = (() => 0) as typeof setTimeout;
+
+  try {
+    const manager = new GameManager(new Deck(createStarterCards()));
+    const cardId = manager.getDeck().getDeckCards()[0].id;
+
+    manager.removeCardFromDeck(cardId);
+
+    assert.equal(manager.getSnake().getMaxHealth(), 36);
+  } finally {
+    globalThis.setTimeout = originalSetTimeout;
+  }
+});
